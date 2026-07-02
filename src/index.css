@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+body {
+  background-color: #09090b; /* Equivalente ao bg-zinc-950 */
+  color: #f4f4f5;            /* Equivalente ao text-zinc-100 */
+  font-family: sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
