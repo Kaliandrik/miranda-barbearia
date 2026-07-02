@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Calendar, Clock, User, Phone } from "lucide-react";
+import { Calendar, Clock } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 interface StepDateTimeProps {
