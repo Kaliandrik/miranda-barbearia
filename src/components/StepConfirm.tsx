@@ -1,4 +1,4 @@
-import { CheckCircle, Calendar, Clock, CreditCard, DollarSign } from "lucide-react";
+import { CheckCircle, Calendar, Clock, CreditCard, DollarSign, User } from "lucide-react";
 import { type Service } from "../lib/supabase";
 interface StepConfirmProps {
   selectedServices: Service[];
@@ -6,6 +6,7 @@ interface StepConfirmProps {
   time: string;
   totalPrice: number;
   paymentMethod: string;
+  professionalName?: string;
   onReset: () => void;
 }
 
@@ -15,6 +16,7 @@ export default function StepConfirm({
   time,
   totalPrice,
   paymentMethod,
+  professionalName,
   onReset,
 }: StepConfirmProps) {
   
@@ -43,6 +45,15 @@ export default function StepConfirm({
             {selectedServices.map((s) => s.name).join(" + ")}
           </p>
         </div>
+
+        {professionalName && (
+          <div className="border-b border-zinc-800/60 pb-2">
+            <p className="text-zinc-500 text-[10px] uppercase tracking-wider font-bold flex items-center gap-1">
+              <User size={10} /> Profissional
+            </p>
+            <p className="text-white text-sm font-semibold mt-0.5">{professionalName}</p>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2 border-b border-zinc-800/60 pb-2">
           <div>

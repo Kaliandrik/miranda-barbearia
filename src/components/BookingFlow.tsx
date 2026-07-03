@@ -1,27 +1,49 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Loader2, Calendar, Phone, ArrowRight, CheckCircle2 } from "lucide-react";
-import { createAppointment, supabase, type Service } from "../lib/supabase";
+import { ArrowLeft, Loader2, Calendar, Phone, ArrowRight, CheckCircle2, CreditCard } from "lucide-react";
+import { createAppointment, supabase, type Service, type Professional } from "../lib/supabase";
 import StepServices from "./StepServices";
 import StepDateTime from "./StepDateTime";
 import StepConfirm from "./StepConfirm";
+import MyAppointments from "./MyAppointments";
+
+const PAYMENT_METHODS = [
+  { id: "pix", label: "Pix" },
+  { id: "dinheiro", label: "Dinheiro" },
+  { id: "débito", label: "Débito" },
+  { id: "crédito", label: "Crédito" },
+];
 
 export default function BookingFlow() {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
-  // Estados de dados unificados
   const [clientPhone, setClientPhone] = useState<string>("");
   const [clientName, setClientName] = useState<string>("");
   const [isNewClient, setIsNewClient] = useState<boolean | null>(null);
   const [isCheckingPhone, setIsCheckingPhone] = useState<boolean>(false);
+
+  const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
 
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [selectedTime, setSelectedTime] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<string>("pix");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [showMyAppointments, setShowMyAppointments] = useState<boolean>(false);
 
   const totalPrice = selectedServices.reduce((acc, svc) => acc + Number(svc.price), 0);
+
+  useEffect(() => {
+    supabase
+      .from("professionals")
+      .select("*")
+      .order("name")
+      .then(({ data, error }: { data: any[] | null; error: any }) => {
+        if (!error && data && data.length > 0) {
+          setSelectedProfessional(data[0]);
+        }
+      });
+  }, []);
 
   function formatPhone(value: string) {
     const digits = value.replace(/\D/g, "");
@@ -94,13 +116,7 @@ export default function BookingFlow() {
 
     setIsSubmitting(true);
     try {
-      const { data: prof } = await supabase
-        .from("professionals")
-        .select("id")
-        .eq("name", "Miranda")
-        .maybeSingle();
-
-      const professionalId = prof?.id || null;
+      const professionalId = selectedProfessional?.id || null;
 
       await createAppointment({
         clientName,
@@ -117,7 +133,7 @@ export default function BookingFlow() {
         await supabase.functions.invoke("disparar-whatsapp", {
           body: {
             clientPhone,
-            professionalName: "Miranda",
+            professionalName: selectedProfessional?.name || "Miranda",
             services: selectedServices.map(s => s.name),
             date: selectedDate,
             time: selectedTime,
@@ -129,7 +145,7 @@ export default function BookingFlow() {
         console.error("Falha ao comunicar com a Edge Function:", innerErr);
       }
 
-      setStep(3);
+      setStep(4);
     } catch (err) {
       console.error("Erro crítico no fluxo de agendamento:", err);
       alert("Erro ao processar seu agendamento. Tente novamente.");
@@ -138,15 +154,30 @@ export default function BookingFlow() {
     }
   }
 
+  function canAdvanceToServices() {
+    return isNewClient === false || (isNewClient === true && clientName.trim().length > 2);
+  }
+
+  function canAdvanceToPayment() {
+    return selectedServices.length > 0 && !!selectedDate && !!selectedTime;
+  }
+
   const cleanPhoneLength = clientPhone.replace(/\D/g, "").length;
-  const isStep1Valid = isNewClient === false || (isNewClient === true && clientName.trim().length > 2);
+
+  function stepLabel() {
+    if (step === 4) return "Fim";
+    return `${step} / 3`;
+  }
+
+  function goBack() {
+    if (step > 1) setStep((step - 1) as 1 | 2 | 3 | 4);
+  }
 
   return (
     <div className="w-full max-w-md mx-auto bg-black border border-zinc-900 rounded-3xl shadow-2xl overflow-hidden relative font-sans flex flex-col justify-between min-h-[550px]">
       
-      {/* BANNER HERO SUPERIOR (FOTO DA ENTRADA) */}
+      {/* BANNER HERO SUPERIOR */}
       <div className="relative w-full h-36 border-b border-zinc-900 overflow-hidden bg-zinc-950 flex-shrink-0">
-        {/* Camada de Gradiente para fundir a foto com o fundo preto do app (invertido para o topo) */}
         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/50 z-10 pointer-events-none" />
         <img 
           src="/img/barbeariaMD.webp" 
@@ -156,31 +187,49 @@ export default function BookingFlow() {
       </div>
 
       <div>
-        {/* Cabeçalho Minimalista */}
+        {/* Cabeçalho */}
         <div className="relative z-10 flex justify-between items-center px-6 pt-6 pb-4 border-b border-zinc-900">
           <div className="flex items-center gap-3">
-            {step === 2 && (
+            {step >= 2 && step <= 3 && (
               <button
                 type="button"
-                onClick={() => setStep(1)}
+                onClick={goBack}
                 className="p-2 rounded-xl bg-zinc-950 border border-zinc-900 text-zinc-400 hover:text-white transition-all"
               >
                 <ArrowLeft size={16} />
               </button>
             )}
-            <div>
-              <h2 className="text-white font-bold text-base tracking-tight">MD Barbearia</h2>
-              <p className="text-[11px] text-zinc-500">Agendamento Online</p>
+            <div className="flex items-center gap-2">
+              <div>
+                <h2 className="text-white font-bold text-base tracking-tight">MD Barbearia</h2>
+                <p className="text-[11px] text-zinc-500">Agendamento Online</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (clientPhone.replace(/\D/g, "").length >= 10) {
+                    setShowMyAppointments(true);
+                  }
+                }}
+                className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border uppercase tracking-wider transition-all ${
+                  clientPhone.replace(/\D/g, "").length >= 10
+                    ? "bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700 cursor-pointer"
+                    : "bg-zinc-950/50 border-zinc-900/50 text-zinc-800 cursor-not-allowed"
+                }`}
+              >
+                Meus Agendamentos
+              </button>
             </div>
           </div>
           <span className="text-[10px] bg-zinc-950 text-zinc-400 font-bold px-3 py-1.5 rounded-full border border-zinc-900 uppercase tracking-widest">
-            {step === 3 ? "Fim" : `${step} / 2`}
+            {stepLabel()}
           </span>
         </div>
 
         {/* Corpo do Fluxo */}
         <div className="p-6 pt-10 relative z-10">
           <AnimatePresence mode="wait">
+            {/* Passo 1 - Identificação */}
             {step === 1 && (
               <motion.div
                 key="step1"
@@ -190,7 +239,6 @@ export default function BookingFlow() {
                 transition={{ duration: 0.2 }}
                 className="space-y-6 text-center"
               >
-                {/* Espaço da Logo MD Barbearia */}
                 <div className="mx-auto w-24 h-24 bg-zinc-950 border border-zinc-800 rounded-full flex items-center justify-center p-2 shadow-xl overflow-hidden mb-4">
                   <img 
                     src="/img/logobarbearia.png" 
@@ -202,7 +250,6 @@ export default function BookingFlow() {
                   />
                 </div>
 
-                {/* Informações da Localidade da MD Barbearia */}
                 <div className="space-y-2">
                   <h3 className="text-white font-bold text-xl tracking-wide uppercase">MD BARBEARIA</h3>
                   <p className="text-zinc-400 text-xs px-6 leading-relaxed flex flex-col items-center justify-center gap-1">
@@ -211,7 +258,6 @@ export default function BookingFlow() {
                     </span>
                   </p>
 
-                  {/* Botões de Redes Sociais */}
                   <div className="flex items-center justify-center gap-2 pt-2">
                     <a 
                       href="https://instagram.com" 
@@ -235,7 +281,6 @@ export default function BookingFlow() {
 
                 <div className="w-full h-[1px] bg-zinc-900 my-2" />
 
-                {/* Campo do WhatsApp */}
                 <div className="space-y-4 text-left">
                   <div className="relative">
                     <span className="absolute inset-y-0 left-4 flex items-center text-zinc-600">
@@ -251,7 +296,6 @@ export default function BookingFlow() {
                     />
                   </div>
 
-                  {/* Botão de Verificação Primário */}
                   {isNewClient === null && cleanPhoneLength >= 10 && (
                     <button
                       type="button"
@@ -269,7 +313,6 @@ export default function BookingFlow() {
                     </button>
                   )}
 
-                  {/* Feedback Dinâmico */}
                   <AnimatePresence>
                     {isNewClient === false && (
                       <motion.div
@@ -306,20 +349,19 @@ export default function BookingFlow() {
                   </AnimatePresence>
                 </div>
 
-                {/* Botão para Avançar de Etapa */}
-                {isStep1Valid && (
+                {canAdvanceToServices() && (
                   <button
                     type="button"
                     onClick={() => setStep(2)}
-                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-zinc-900 to-zinc-800 hover:from-zinc-800 hover:to-zinc-700 text-white font-bold py-4 rounded-2xl transition-all border border-zinc-800 shadow-md"
+                    className="w-full flex items-center justify-center gap-2 bg-white hover:bg-zinc-200 text-black font-bold py-4 rounded-2xl transition-all shadow-lg"
                   >
-                    Avançar para Serviços <ArrowRight size={16} />
+                    Escolher Serviços <ArrowRight size={16} />
                   </button>
                 )}
               </motion.div>
             )}
 
-            {/* Passo 2 */}
+            {/* Passo 2 - Serviços + Data/Hora */}
             {step === 2 && (
               <motion.div
                 key="step2"
@@ -337,61 +379,94 @@ export default function BookingFlow() {
                   clientName={clientName}
                   clientPhone={clientPhone}
                   selectedServicesCount={selectedServices.length}
+                  professionalId={selectedProfessional?.id}
                   onSelectDate={setSelectedDate}
                   onSelectTime={setSelectedTime}
                   onChangeName={setClientName}
                   onChangePhone={setClientPhone}
                 />
 
-                {selectedDate && selectedTime && clientName.trim() && clientPhone.trim() && selectedServices.length > 0 && (
-                  <div className="space-y-3 pt-1">
-                    <p className="text-zinc-500 text-xs uppercase tracking-wider font-semibold pl-1">Forma de Pagamento</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { id: "pix", label: "Pix" },
-                        { id: "dinheiro", label: "Dinheiro" },
-                        { id: "débito", label: "Débito" },
-                        { id: "crédito", label: "Crédito" }
-                      ].map((method) => {
-                        const isSelected = paymentMethod === method.id;
-                        return (
-                          <button
-                            key={method.id}
-                            type="button"
-                            onClick={() => setPaymentMethod(method.id)}
-                            className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl border text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
-                              isSelected
-                                ? "bg-white border-white text-black font-extrabold shadow-lg"
-                                : "bg-zinc-950 border-zinc-900 text-zinc-400 hover:text-white"
-                            }`}
-                          >
-                            <span className={`flex-shrink-0 ${isSelected ? "text-black" : "text-zinc-500"}`}>
-                              {method.id === "pix" && (
-                                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                                  <path d="M12 .33a1.12 1.12 0 0 0-.79.33l-3 3a1.13 1.13 0 0 0 0 1.58l3 3a1.15 1.15 0 0 0 1.58 0l3-3a1.13 1.13 0 0 0 0-1.58l-3-3A1.12 1.12 0 0 0 12 .33zm-4.59 7.5a1.12 1.12 0 0 0-.79.33l-6 6a1.13 1.13 0 0 0 0 1.58l6 6a1.15 1.15 0 0 0 1.58 0l6-6a1.13 1.13 0 0 0 0-1.58l-6-6a1.12 1.12 0 0 0-.79-.33zm9.18 0a1.12 1.12 0 0 0-.79.33l-6 6a1.13 1.13 0 0 0 0 1.58l6 6a1.15 1.15 0 0 0 1.58 0l6-6a1.13 1.13 0 0 0 0-1.58l-6-6a1.12 1.12 0 0 0-.79-.33z"/>
-                                </svg>
-                              )}
-                              {method.id === "dinheiro" && (
-                                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2.5" fill="none"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
-                              )}
-                              {method.id === "débito" && (
-                                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2.5" fill="none"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
-                              )}
-                              {method.id === "crédito" && (
-                                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2.5" fill="none"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line><circle cx="6" cy="15" r="1"></circle></svg>
-                              )}
-                            </span>
-                            <span>{method.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                {canAdvanceToPayment() && (
+                  <button
+                    type="button"
+                    onClick={() => setStep(3)}
+                    className="w-full flex items-center justify-center gap-2 bg-white hover:bg-zinc-200 text-black font-bold py-4 rounded-2xl transition-all shadow-lg"
+                  >
+                    Escolher Pagamento <ArrowRight size={16} />
+                  </button>
                 )}
+              </motion.div>
+            )}
+
+            {/* Passo 3 - Pagamento */}
+            {step === 3 && (
+              <motion.div
+                key="step3"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-6"
+              >
+                {/* Resumo do agendamento */}
+                <div className="bg-zinc-950/50 border border-zinc-900 rounded-2xl p-4 space-y-2">
+                  <p className="text-zinc-500 text-xs uppercase tracking-wider font-semibold">Resumo</p>
+                  <div className="space-y-1">
+                    {selectedProfessional && (
+                      <p className="text-white text-sm font-semibold">{selectedProfessional.name}</p>
+                    )}
+                    <p className="text-white text-sm font-semibold">{clientName}</p>
+                    <p className="text-zinc-400 text-xs">{selectedServices.map(s => s.name).join(", ")}</p>
+                    <p className="text-zinc-400 text-xs">{selectedDate} às {selectedTime}</p>
+                    <p className="text-white text-sm font-bold mt-1">
+                      Total: R$ {totalPrice.toFixed(2).replace(".", ",")}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Forma de Pagamento */}
+                <div className="space-y-3">
+                  <p className="text-zinc-400 text-xs uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                    <CreditCard size={14} /> Forma de Pagamento
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {PAYMENT_METHODS.map((method) => {
+                      const isSelected = paymentMethod === method.id;
+                      return (
+                        <button
+                          key={method.id}
+                          type="button"
+                          onClick={() => setPaymentMethod(method.id)}
+                          className={`flex items-center justify-center gap-2 px-4 py-5 rounded-2xl border text-sm font-bold uppercase tracking-wider transition-all duration-200 ${
+                            isSelected
+                              ? "bg-white border-white text-black shadow-lg"
+                              : "bg-zinc-950 border-zinc-900 text-zinc-400 hover:text-white"
+                          }`}
+                        >
+                          {method.id === "pix" && (
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                              <path d="M12 .33a1.12 1.12 0 0 0-.79.33l-3 3a1.13 1.13 0 0 0 0 1.58l3 3a1.15 1.15 0 0 0 1.58 0l3-3a1.13 1.13 0 0 0 0-1.58l-3-3A1.12 1.12 0 0 0 12 .33zm-4.59 7.5a1.12 1.12 0 0 0-.79.33l-6 6a1.13 1.13 0 0 0 0 1.58l6 6a1.15 1.15 0 0 0 1.58 0l6-6a1.13 1.13 0 0 0 0-1.58l-6-6a1.12 1.12 0 0 0-.79-.33zm9.18 0a1.12 1.12 0 0 0-.79.33l-6 6a1.13 1.13 0 0 0 0 1.58l6 6a1.15 1.15 0 0 0 1.58 0l6-6a1.13 1.13 0 0 0 0-1.58l-6-6a1.12 1.12 0 0 0-.79-.33z"/>
+                            </svg>
+                          )}
+                          {method.id === "dinheiro" && (
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2.5" fill="none"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                          )}
+                          {method.id === "débito" && (
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2.5" fill="none"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+                          )}
+                          {method.id === "crédito" && (
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2.5" fill="none"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line><circle cx="6" cy="15" r="1"></circle></svg>
+                          )}
+                          {method.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
                 <button
                   type="button"
-                  disabled={!clientName.trim() || !clientPhone.trim() || !selectedDate || !selectedTime || selectedServices.length === 0 || isSubmitting}
+                  disabled={isSubmitting}
                   onClick={handleFinalizeBooking}
                   className="w-full flex items-center justify-center gap-2 bg-white hover:bg-zinc-200 disabled:bg-zinc-950 disabled:border-zinc-900 disabled:text-zinc-700 text-black font-bold py-4 rounded-2xl transition-all disabled:cursor-not-allowed border border-transparent shadow-lg"
                 >
@@ -408,10 +483,10 @@ export default function BookingFlow() {
               </motion.div>
             )}
 
-            {/* Passo 3 */}
-            {step === 3 && (
+            {/* Passo 4 - Confirmação */}
+            {step === 4 && (
               <motion.div
-                key="step3"
+                key="step4"
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.2 }}
@@ -422,6 +497,7 @@ export default function BookingFlow() {
                   time={selectedTime}
                   totalPrice={totalPrice}
                   paymentMethod={paymentMethod}
+                  professionalName={selectedProfessional?.name}
                   onReset={handleResetFlow}
                 />
               </motion.div>
@@ -430,6 +506,15 @@ export default function BookingFlow() {
         </div>
       </div>
 
+      <AnimatePresence>
+        {showMyAppointments && (
+          <MyAppointments
+            clientPhone={clientPhone}
+            clientName={clientName || "Cliente"}
+            onClose={() => setShowMyAppointments(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
