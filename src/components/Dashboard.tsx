@@ -114,9 +114,8 @@ function getDayStatus(dateStr: string) {
 
 export default function Dashboard() {
   const [session, setSession] = useState<boolean | null>(null);
-  const [authName, setAuthName] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
+  const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
 
   const adminEmail = import.meta.env.VITE_ADMIN_EMAIL as string;
@@ -586,16 +585,9 @@ export default function Dashboard() {
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
-            <div className="relative">
-              <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" />
-              <input
-                type="text"
-                placeholder="Nome"
-                value={authName}
-                onChange={(e) => setAuthName(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-900 rounded-2xl pl-11 pr-4 py-4 text-white placeholder-zinc-700 focus:outline-none focus:border-zinc-700 text-sm font-medium transition-all"
-                autoFocus
-              />
+            <div className="bg-zinc-950/50 border border-zinc-900 rounded-2xl px-4 py-3 flex items-center gap-3">
+              <Mail size={16} className="text-zinc-600 shrink-0" />
+              <span className="text-zinc-400 text-sm font-medium">{adminEmail}</span>
             </div>
             <div className="relative">
               <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" />
